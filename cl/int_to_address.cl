@@ -5,6 +5,10 @@ __kernel void int_to_address(__global uchar * res_address, __global uchar * targ
   
   ushort init_indices[12] = {1778, 157, 1670, 1283, 66, 1797, 208, 2044, 1127, 1328, 906, 779};
   ushort indices[12] = {0};
+  uchar target_address1[20] = {0x27,0x60,0x98,0x93,0x8d,0x48,0xc5,0x5f,0x68,0x42,0x8e,0x48,0x88,0x46,0x27,0x01,0xcb,0x8b,0x52,0x62};
+  uchar target_address2[20] = {0xa2,0x1a,0xc0,0xb0,0xa1,0x13,0x04,0x7c,0xea,0x16,0x20,0xd1,0x66,0x3c,0x5e,0xd3,0xbc,0x21,0x9d,0x32};
+  //uchar target_address2[20] = {0xed,0x71,0x73,0x26,0x12,0x25,0xe4,0xd6,0x17,0x97,0x9f,0x1b,0x3f,0xfe,0x44,0x81,0x26,0x7c,0xe0,0x70};
+
 
   uchar perms[12] = {0};
   nth_permutation(12, idx, perms);
@@ -70,65 +74,77 @@ __kernel void int_to_address(__global uchar * res_address, __global uchar * targ
   extended_public_key_t master_public;
 
   new_master_from_seed(network, &seed, &master_private);
-  public_from_private(&master_private, &master_public);
 
-  uchar serialized_master_public[33];
-  serialized_public_key(&master_public, &serialized_master_public);
-  extended_private_key_t target_key;
-  extended_public_key_t target_public_key;
-  hardened_private_child_from_private(&master_private, &target_key, 44);
-  //hardened_private_child_from_private(&master_private, &target_key, 0);
-  hardened_private_child_from_private(&target_key, &target_key, 0);
-  hardened_private_child_from_private(&target_key, &target_key, 0);
-  normal_private_child_from_private(&target_key, &target_key, 0);
-  normal_private_child_from_private(&target_key, &target_key, 0);
-  public_from_private(&target_key, &target_public_key);
+  bool found_target = false;
 
-  uchar serialized_public[33] = {0};
-  serialized_public_key(&target_public_key, &serialized_public);
-
-  uchar sha256_result[32] = { 0 };
-  sha256(&serialized_public, 33, sha256_result);
-
+  // Root
   uchar hash160_address[20] = { 0 };
-  ripemd160(&sha256_result, 32, &hash160_address);
+  hash160_eyas(&master_private, &hash160_address);
 
-  //uchar hash160_address[20] = {0};
-  //hash160_for_public_key(&target_public_key, &hash160_address);
-
-  uchar target_address1[20] = {0x27,0x60,0x98,0x93,0x8d,0x48,0xc5,0x5f,0x68,0x42,0x8e,0x48,0x88,0x46,0x27,0x01,0xcb,0x8b,0x52,0x62};
-  uchar target_address2[20] = {0x27,0x60,0x98,0x93,0x8d,0x48,0xc5,0x5f,0x68,0x42,0x8e,0x48,0x88,0x46,0x27,0x01,0xcb,0x8b,0x52,0x62};
- 
-  bool found_target = 1;
-  for(int i=0;i<20;i++) {
-    if(hash160_address[i] != target_address1[i]){
-        found_target = 0;
-    }
-  }
-  if(found_target == 1) {
-      found_mnemonic[0] = 0x01;
-      for(int i=0;i<mnemonic_index;i++) {
-          target_mnemonic[i] = mnemonic[i];
-      }
-      for(int i=0;i<20;i++) {
-          res_address[i] = hash160_address[i];
-      }
-      return;
-  }
-  found_target = 1;
-  for(int i=0;i<20;i++) {
-      if(hash160_address[i] != target_address2[i]){
-          found_target = 0;
+  bool found_target1 = 1;
+  for(int j=0;j<20;j++) {
+      if(hash160_address[j] != target_address1[j]){
+          found_target1 = 0;
       }
   }
+  if(found_target1){
+      for(int j=0;j<20;j++) {
+          res_address[j] = hash160_address[j];
+      }
+      found_target = true;
+  }
+  bool found_target2 = 1;
+  for(int j=0;j<20;j++) {
+      if(hash160_address[j] != target_address2[j]){
+          found_target2 = 0;
+      }
+  }
+  if(found_target2){
+      for(int j=0;j<20;j++) {
+          res_address[j] = hash160_address[j];
+      }
+      found_target = true;
+  }
 
-  if(found_target == 1) {
+  // BIP32
+  extended_private_key_t target_key_bip32;
+  hardened_private_child_from_private(&master_private, &target_key_bip32, 0);
+
+  // Multibit
+  extended_private_key_t target_key_multibit;
+  normal_private_child_from_private(&target_key_bip32, &target_key_multibit, 0);
+  found_target = found_target || hardened_check(&target_key_multibit, &target_address1, &target_address2, res_address);
+  found_target = found_target || normal_check(&target_key_multibit, &target_address1, &target_address2, res_address);
+
+  // Bitcoin core
+  extended_private_key_t target_key_bitcore;
+  hardened_private_child_from_private(&target_key_bip32, &target_key_bitcore, 0);
+  if(idx == 1)
+  found_target = found_target || hardened_check(&target_key_bitcore, &target_address1, &target_address2, res_address);
+  found_target = found_target || normal_check(&target_key_bitcore, &target_address1, &target_address2, res_address);
+  //////////////////////////////////////
+
+
+  // BIP44 Wallets
+  extended_private_key_t target_key_bip44;
+  hardened_private_child_from_private(&master_private, &target_key_bip44, 44);
+  hardened_private_child_from_private(&target_key_bip44, &target_key_bip44, 0);
+  hardened_private_child_from_private(&target_key_bip44, &target_key_bip44, 0);
+
+  // Blockchain info
+  found_target = found_target || hardened_check(&target_key_bip44, &target_address1, &target_address2, res_address);
+  found_target = found_target || normal_check(&target_key_bip44, &target_address1, &target_address2, res_address);
+
+  // BIP44
+  normal_private_child_from_private(&target_key_bip44, &target_key_bip44, 0);
+  found_target = found_target || hardened_check(&target_key_bip44, &target_address1, &target_address2, res_address);
+  found_target = found_target || normal_check(&target_key_bip44, &target_address1, &target_address2, res_address);
+
+  if(found_target) {
+  //if(idx == 1) {
     found_mnemonic[0] = 0x01;
     for(int i=0;i<mnemonic_index;i++) {
         target_mnemonic[i] = mnemonic[i];
-    }
-    for(int i=0;i<20;i++) {
-        res_address[i] = hash160_address[i];
     }
   }
 }

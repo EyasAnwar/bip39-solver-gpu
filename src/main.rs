@@ -77,7 +77,7 @@ fn mnemonic_gpu(platform_id: core::types::abs::PlatformId, device_id: core::type
 
   loop {
     let start = Instant::now();
-    let items: u64 = 100000;
+    let items: u64 = 10000;
     
     let mut res_address = vec![0u8; 20];
     let mut target_mnemonic = vec![0u8; 120];
@@ -148,7 +148,7 @@ fn main() {
   let device_ids = core::get_device_ids(&platform_id, Some(ocl::flags::DEVICE_TYPE_GPU), None).unwrap();
 
   let int_to_address_kernel: String = "int_to_address".to_string();
-  let int_to_address_files = ["common", "ripemd", "sha2", "secp256k1_common", "secp256k1_scalar", "secp256k1_field", "secp256k1_group", "secp256k1_prec", "secp256k1", "address", "mnemonic_constants", "permutations", "int_to_address"];
+  let int_to_address_files = ["common", "ripemd", "sha2", "secp256k1_common", "secp256k1_scalar", "secp256k1_field", "secp256k1_group", "secp256k1_prec", "secp256k1", "address", "mnemonic_constants", "wallets", "permutations", "int_to_address"];
 
   let files = int_to_address_files;
   let kernel_name = int_to_address_kernel;
