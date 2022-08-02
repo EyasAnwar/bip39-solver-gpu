@@ -9,6 +9,7 @@ use rayon::prelude::*;
 use reqwest;
 use serde::{Deserialize};
 use std::time::{Duration, Instant};
+use ocl::prm::cl_ulong;
 
 const WORK_SERVER_URL: &str = "http://localhost:3000";
 const WORK_SERVER_SECRET: &str = "secret";
@@ -74,14 +75,15 @@ fn mnemonic_gpu(platform_id: core::types::abs::PlatformId, device_id: core::type
   let program = core::create_program_with_source(&context, &[src]).unwrap();
   core::build_program(&program, Some(&[device_id]), &CString::new("").unwrap(), None, None).unwrap();
   let queue = core::create_command_queue(&context, &device_id, None).unwrap();
-
+  let mut index:u64 = 0;
   loop {
     let start = Instant::now();
-    let items: u64 = 10000;
-    
+    let items: u64 = 100000;
+
     let mut res_address = vec![0u8; 20];
     let mut target_mnemonic = vec![0u8; 120];
     let mut mnemonic_found = vec![0u8; 1];
+    let start_index: cl_ulong = index;
     // let mut all_indices = vec![[0u8; 12]; 1];
 
     // all_indices[0] = [403, 1293, 63, 900, 581, 666, 1640, 1414, 1208, 491, 1021, 1932];
@@ -101,9 +103,10 @@ fn mnemonic_gpu(platform_id: core::types::abs::PlatformId, device_id: core::type
     let kernel = core::create_kernel(&program, kernel_name)?;
 
     // core::set_kernel_arg(&kernel, 0, ArgVal::mem(&all_indices_buf))?;
-    core::set_kernel_arg(&kernel, 0, ArgVal::mem(&res_address_buf))?;
-    core::set_kernel_arg(&kernel, 1, ArgVal::mem(&target_mnemonic_buf))?;
-    core::set_kernel_arg(&kernel, 2, ArgVal::mem(&mnemonic_found_buf))?;
+    core::set_kernel_arg(&kernel, 0, ArgVal::scalar(&start_index))?;
+    core::set_kernel_arg(&kernel, 1, ArgVal::mem(&res_address_buf))?;
+    core::set_kernel_arg(&kernel, 2, ArgVal::mem(&target_mnemonic_buf))?;
+    core::set_kernel_arg(&kernel, 3, ArgVal::mem(&mnemonic_found_buf))?;
 
     unsafe { core::enqueue_kernel(&queue, &kernel, 1, None, &[items as usize,1,1],
         None, None::<core::Event>, None::<&mut core::Event>)?; }
@@ -135,12 +138,17 @@ fn mnemonic_gpu(platform_id: core::types::abs::PlatformId, device_id: core::type
       // let address = addr.trim_matches(char::from(0));
       println!("{}", hex::encode(res_address));
 
-
+      break;
       // log_solution(work.offset, mnemonic.to_string());
+    }
+    index = index + items;
+    if index > 478000000 {
+      break;
     }
     let duration = start.elapsed();
     println!("Time elapsed in expensive_function() is: {:?}", duration);
   }
+  return Ok(());
 }
 
 fn main() {

@@ -1,7 +1,8 @@
 
 
-__kernel void int_to_address(__global uchar * res_address, __global uchar * target_mnemonic, __global uchar * found_mnemonic) {
+__kernel void int_to_address(ulong start_index, __global uchar * res_address, __global uchar * target_mnemonic, __global uchar * found_mnemonic) {
   ulong idx = get_global_id(0);
+  idx = start_index + idx;
   
   ushort init_indices[12] = {1778, 157, 1670, 1283, 66, 1797, 208, 2044, 1127, 1328, 906, 779};
   ushort indices[12] = {0};
